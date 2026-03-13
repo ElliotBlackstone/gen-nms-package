@@ -1,6 +1,6 @@
 # gen-nms
 
-A small PyTorch extension package that provides **DIoU-based non-maximum suppression (NMS)** as a standalone package, without modifying `torchvision`.
+A small PyTorch extension package that provides **DIoU-based non-maximum suppression (NMS)** (with CUDA support) as a standalone package, without modifying `torchvision`.
 
 The package exposes two main functions:
 
