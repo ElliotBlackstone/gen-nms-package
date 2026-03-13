@@ -13,8 +13,7 @@ description = "Standalone DIoU-based NMS extension for PyTorch"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "numpy",
-    "torch>=2.4"
+    "numpy"
 ]
 
 [project.optional-dependencies]
