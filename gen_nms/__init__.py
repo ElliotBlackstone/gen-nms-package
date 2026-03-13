@@ -1,3 +1,4 @@
+import torch
 from . import _C
 from .ops import diou_nms, batched_diou_nms
 
