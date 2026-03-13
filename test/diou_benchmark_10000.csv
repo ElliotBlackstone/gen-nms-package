@@ -1,0 +1,11 @@
+device,mode,implementation,num_boxes,num_kept,repeats,avg_ms,median_ms,min_ms,max_ms,speedup_vs_old_x,exact_match,tolerant_match,match_note
+cpu,class_agnostic,old_diou_nms,10000,1527,10,497.7572491999126,489.1841570001816,448.33805999951437,555.2325320004456,,,,baseline
+cpu,class_agnostic,gen_nms.diou_nms,10000,1527,10,73.63847079996049,73.6352810004064,73.17494499966415,74.00433600014367,6.759472919421077,True,True,exact index match
+cpu,per_class,old_diou_nms(per-class),10000,4327,10,1068.5180664000654,1065.7326514997294,1049.5380040001692,1090.131699000267,,,,baseline
+cpu,per_class,gen_nms.batched_diou_nms,10000,4327,10,41.35111010000401,41.077618499912205,40.21377900062362,42.79356999995798,25.840130139576637,True,True,exact index match
+cuda,class_agnostic,old_diou_nms,10000,1527,10,1484.3574927999725,1446.2125929999274,1388.2094419996065,1866.204449000179,,,,baseline
+cuda,class_agnostic,gen_nms.diou_nms,10000,1527,10,9.649058600007265,9.894544499729818,7.893537000200013,10.09468500069488,153.83443653237373,True,True,exact index match
+cuda,per_class,old_diou_nms(per-class),10000,4327,10,5345.452350800042,4269.985335999991,4226.786897000238,11197.812940999938,,,,baseline
+cuda,per_class,gen_nms.batched_diou_nms,10000,4327,10,18.915602700235468,18.2601790006629,18.067822999910277,21.287571999891952,282.5948734233829,True,True,exact index match
+cpu_vs_gpu,class_agnostic,gen_nms.diou_nms,10000,1527,0,,,,,,True,True,exact index match
+cpu_vs_gpu,per_class,gen_nms.batched_diou_nms,10000,4327,0,,,,,,True,True,exact index match

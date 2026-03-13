@@ -1,0 +1,39 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python cache / compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build / packaging artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# C/C++ / extension build artifacts
+*.so
+*.o
+*.a
+*.pyd
+*.dll
+*.dylib
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
