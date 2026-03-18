@@ -4,8 +4,8 @@
 # Licensed under the BSD-3-Clause License. See LICENSE and THIRD_PARTY_NOTICES.md.
 
 from .boxes import (
-    diou_nms,
-    batched_diou_nms,
+    iou_nms, giou_nms, diou_nms, ciou_nms,
+    batched_iou_nms, batched_giou_nms, batched_diou_nms, batched_ciou_nms,
 )
 
 
@@ -13,6 +13,6 @@ from .boxes import (
 
 
 __all__ = [
-    "diou_nms",
-    "batched_diou_nms",
+    "iou_nms", "giou_nms", "diou_nms", "ciou_nms",
+    "batched_iou_nms", "batched_giou_nms", "batched_diou_nms", "batched_ciou_nms",
 ]

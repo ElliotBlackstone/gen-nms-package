@@ -1,5 +1,12 @@
 import torch
 from . import _C
-from .ops import diou_nms, batched_diou_nms
+from . import _meta_registrations
+from .ops import (
+    iou_nms, giou_nms, diou_nms, ciou_nms,
+    batched_iou_nms, batched_giou_nms, batched_diou_nms, batched_ciou_nms,
+)
 
-__all__ = ["diou_nms", "batched_diou_nms"]
+__all__ = [
+    "iou_nms", "giou_nms", "diou_nms", "ciou_nms",
+    "batched_iou_nms", "batched_giou_nms", "batched_diou_nms", "batched_ciou_nms",
+]

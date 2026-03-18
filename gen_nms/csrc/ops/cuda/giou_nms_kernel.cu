@@ -19,7 +19,7 @@ namespace {
 int const threadsPerBlock = sizeof(unsigned long long) * 8;
 
 template <typename T>
-__device__ inline bool devDIoU(
+__device__ inline bool devGIoU(
     T const* const a,
     T const* const b,
     const float threshold) {
@@ -30,35 +30,28 @@ __device__ inline bool devDIoU(
   T left = max(a[0], b[0]), right = min(a[2], b[2]);
   T top  = max(a[1], b[1]), bottom = min(a[3], b[3]);
   T width = max(right - left, (T)0), height = max(bottom - top, (T)0);
-  acc_T interS = (acc_T)width * height;
 
   // areas
+  acc_T interS = (acc_T)width * height;
   acc_T Sa = ((acc_T)a[2] - a[0]) * (a[3] - a[1]);
   acc_T Sb = ((acc_T)b[2] - b[0]) * (b[3] - b[1]);
+  acc_T uni = Sa + Sb - interS;
 
-  // centers
-  acc_T cax = ((acc_T)a[0] + a[2]) * 0.5;
-  acc_T cay = ((acc_T)a[1] + a[3]) * 0.5;
-  acc_T cbx = ((acc_T)b[0] + b[2]) * 0.5;
-  acc_T cby = ((acc_T)b[1] + b[3]) * 0.5;
-
-  acc_T rho2 = (cax - cbx) * (cax - cbx) + (cay - cby) * (cay - cby);
-
-  // enclosing diagonal squared
+  // enclosing box
   acc_T ex1 = (acc_T)min(a[0], b[0]);
   acc_T ey1 = (acc_T)min(a[1], b[1]);
   acc_T ex2 = (acc_T)max(a[2], b[2]);
   acc_T ey2 = (acc_T)max(a[3], b[3]);
 
-  acc_T c2 = (ex2 - ex1) * (ex2 - ex1) + (ey2 - ey1) * (ey2 - ey1);
+  acc_T encloseArea = (ex2 - ex1) * (ey2 - ey1);
 
-  return (interS / (Sa + Sb - interS) - (rho2 / c2)) > threshold;
+  return (interS / uni - (encloseArea - uni) / encloseArea) > threshold;
 }
 
 template <typename T>
-__global__ void diou_nms_kernel_impl(
+__global__ void giou_nms_kernel_impl(
     int n_boxes,
-    double diou_threshold,
+    double giou_threshold,
     const T* dev_boxes,
     unsigned long long* dev_mask) {
   const auto row_start = blockIdx.y;
@@ -95,7 +88,7 @@ __global__ void diou_nms_kernel_impl(
       start = threadIdx.x + 1;
     }
     for (i = start; i < col_size; i++) {
-      if (devDIoU<T>(cur_box, block_boxes + i * 4, diou_threshold)) {
+      if (devGIoU<T>(cur_box, block_boxes + i * 4, giou_threshold)) {
         t |= 1ULL << i;
       }
     }
@@ -149,10 +142,10 @@ __global__ static void gather_keep_from_mask(
   }
 }
 
-at::Tensor diou_nms_kernel(
+at::Tensor giou_nms_kernel(
     const at::Tensor& dets,
     const at::Tensor& scores,
-    double diou_threshold) {
+    double giou_threshold) {
   TORCH_CHECK(dets.is_cuda(), "dets must be a CUDA tensor");
   TORCH_CHECK(scores.is_cuda(), "scores must be a CUDA tensor");
 
@@ -197,10 +190,10 @@ at::Tensor diou_nms_kernel(
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
-      dets_sorted.scalar_type(), "diou_nms_kernel", [&] {
-        diou_nms_kernel_impl<scalar_t><<<blocks, threads, 0, stream>>>(
+      dets_sorted.scalar_type(), "giou_nms_kernel", [&] {
+        giou_nms_kernel_impl<scalar_t><<<blocks, threads, 0, stream>>>(
             dets_num,
-            diou_threshold,
+            giou_threshold,
             dets_sorted.data_ptr<scalar_t>(),
             (unsigned long long*)mask.data_ptr<int64_t>());
       });
@@ -229,7 +222,7 @@ at::Tensor diou_nms_kernel(
 } // namespace
 
 TORCH_LIBRARY_IMPL(gen_nms, CUDA, m) {
-  m.impl(TORCH_SELECTIVE_NAME("gen_nms::diou_nms"), TORCH_FN(diou_nms_kernel));
+  m.impl(TORCH_SELECTIVE_NAME("gen_nms::giou_nms"), TORCH_FN(giou_nms_kernel));
 }
 
 } // namespace ops

@@ -1,0 +1,6 @@
+group,metric,impl,device,time_ms,speedup_vs_python_cpu,speedup_vs_torchvision_same_device,exact_match_vs_python_cpu,tolerant_match_vs_python_cpu,num_kept,note
+iou-vs-torchvision,IOU,pure_python,cpu,76.41740500002925,1.0,,True,True,885,reference
+iou-vs-torchvision,IOU,gen_nms,cpu,2.099983999869437,36.38951773193528,1.0074024381086457,True,True,885,
+iou-vs-torchvision,IOU,torchvision_nms,cpu,2.1155290014576167,36.122125930382914,1.0,True,True,885,
+iou-vs-torchvision,IOU,gen_nms,gpu,2.3951361179351807,31.905245145694607,0.9858913993917338,True,True,885,
+iou-vs-torchvision,IOU,torchvision_nms,gpu,2.3613440990448,32.36182521257333,1.0,True,True,885,

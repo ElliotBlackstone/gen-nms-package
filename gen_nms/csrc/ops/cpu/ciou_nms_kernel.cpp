@@ -12,10 +12,10 @@ namespace ops {
 namespace {
 
 template <typename scalar_t>
-at::Tensor diou_nms_kernel_impl(
+at::Tensor ciou_nms_kernel_impl(
     const at::Tensor& dets,
     const at::Tensor& scores,
-    double diou_threshold) {
+    double ciou_threshold) {
   TORCH_CHECK(dets.is_cpu(), "dets must be a CPU tensor");
   TORCH_CHECK(scores.is_cpu(), "scores must be a CPU tensor");
   TORCH_CHECK(dets.scalar_type() == scores.scalar_type(),
@@ -40,6 +40,9 @@ at::Tensor diou_nms_kernel_impl(
   at::Tensor cx_t = (x2_t + x1_t) * 0.5;
   at::Tensor cy_t = (y2_t + y1_t) * 0.5;
 
+  // aspect ratio
+  at::Tensor atan_t = atan((x2_t - x1_t) / (y2_t - y1_t));
+
   // Stable descending sort
   auto order_t = std::get<1>(scores.sort(/*stable=*/true, /*dim=*/0, /*descending=*/true));
 
@@ -57,8 +60,7 @@ at::Tensor diou_nms_kernel_impl(
   auto areas = areas_t.data_ptr<scalar_t>();
   auto cx = cx_t.data_ptr<scalar_t>();
   auto cy = cy_t.data_ptr<scalar_t>();
-
-  auto eps = 1e-7;
+  auto angles = atan_t.data_ptr<scalar_t>();
 
   int64_t num_to_keep = 0;
 
@@ -122,10 +124,15 @@ at::Tensor diou_nms_kernel_impl(
       auto ch = ey2 - ey1;
       auto c2 = cw * cw + ch * ch;
 
-      // DIoU
-      auto diou = iou - (rho2 / (c2 + eps));
+      // aspect ratio
+      double pi = 3.14159265358979323846;
+      auto v = (4 / (pi * pi)) * (angles[i] - angles[j]) * (angles[i] - angles[j]);
+      auto alpha = v / (1 - iou + v);
 
-      if (diou > diou_threshold) {
+      // CIoU
+      auto ciou = iou - (rho2 / c2) - alpha * v;
+
+      if (ciou > ciou_threshold) {
         suppressed[j] = 1;
       }
     }
@@ -136,10 +143,10 @@ at::Tensor diou_nms_kernel_impl(
 
 
 
-at::Tensor diou_nms_kernel(
+at::Tensor ciou_nms_kernel(
     const at::Tensor& dets,
     const at::Tensor& scores,
-    double diou_threshold) {
+    double ciou_threshold) {
   TORCH_CHECK(
       dets.dim() == 2, "boxes should be a 2d tensor, got ", dets.dim(), "D");
   TORCH_CHECK(
@@ -161,8 +168,8 @@ at::Tensor diou_nms_kernel(
 
   auto result = at::empty({0}, dets.options());
 
-  AT_DISPATCH_FLOATING_TYPES(dets.scalar_type(), "diou_nms_kernel", [&] {
-    result = diou_nms_kernel_impl<scalar_t>(dets, scores, diou_threshold);
+  AT_DISPATCH_FLOATING_TYPES(dets.scalar_type(), "ciou_nms_kernel", [&] {
+    result = ciou_nms_kernel_impl<scalar_t>(dets, scores, ciou_threshold);
   });
   return result;
 }
@@ -170,7 +177,7 @@ at::Tensor diou_nms_kernel(
 } // namespace
 
 TORCH_LIBRARY_IMPL(gen_nms, CPU, m) {
-  m.impl(TORCH_SELECTIVE_NAME("gen_nms::diou_nms"), TORCH_FN(diou_nms_kernel));
+  m.impl(TORCH_SELECTIVE_NAME("gen_nms::ciou_nms"), TORCH_FN(ciou_nms_kernel));
 }
 
 } // namespace ops

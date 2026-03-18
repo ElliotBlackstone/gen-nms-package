@@ -12,10 +12,10 @@ namespace ops {
 namespace {
 
 template <typename scalar_t>
-at::Tensor diou_nms_kernel_impl(
+at::Tensor giou_nms_kernel_impl(
     const at::Tensor& dets,
     const at::Tensor& scores,
-    double diou_threshold) {
+    double giou_threshold) {
   TORCH_CHECK(dets.is_cpu(), "dets must be a CPU tensor");
   TORCH_CHECK(scores.is_cpu(), "scores must be a CPU tensor");
   TORCH_CHECK(dets.scalar_type() == scores.scalar_type(),
@@ -36,10 +36,6 @@ at::Tensor diou_nms_kernel_impl(
 
   at::Tensor areas_t = (x2_t - x1_t) * (y2_t - y1_t);
 
-  // centers
-  at::Tensor cx_t = (x2_t + x1_t) * 0.5;
-  at::Tensor cy_t = (y2_t + y1_t) * 0.5;
-
   // Stable descending sort
   auto order_t = std::get<1>(scores.sort(/*stable=*/true, /*dim=*/0, /*descending=*/true));
 
@@ -55,8 +51,6 @@ at::Tensor diou_nms_kernel_impl(
   auto x2 = x2_t.data_ptr<scalar_t>();
   auto y2 = y2_t.data_ptr<scalar_t>();
   auto areas = areas_t.data_ptr<scalar_t>();
-  auto cx = cx_t.data_ptr<scalar_t>();
-  auto cy = cy_t.data_ptr<scalar_t>();
 
   auto eps = 1e-7;
 
@@ -76,9 +70,6 @@ at::Tensor diou_nms_kernel_impl(
     auto iy2 = y2[i];
     auto iarea = areas[i];
 
-    // center of i
-    auto cix = cx[i];
-    auto ciy = cy[i];
 
     for (int64_t _j = _i + 1; _j < ndets; ++_j) {
       const int64_t j = order[_j];
@@ -106,26 +97,18 @@ at::Tensor diou_nms_kernel_impl(
       if (uni <= 0) {
         continue;  // degenerate; do not suppress
       }
-      auto iou = inter / uni;
 
-      // center distance squared rho^2
-      auto dx = cix - cx[j];
-      auto dy = ciy - cy[j];
-      auto rho2 = dx * dx + dy * dy;
-
-      // enclosing diagonal squared c^2
+      // enclosing box
       auto ex1 = std::min(ix1, jx1);
       auto ey1 = std::min(iy1, jy1);
       auto ex2 = std::max(ix2, jx2);
       auto ey2 = std::max(iy2, jy2);
-      auto cw = ex2 - ex1;
-      auto ch = ey2 - ey1;
-      auto c2 = cw * cw + ch * ch;
+      auto encArea = (ex2 - ex1) * (ey2 - ey1);
 
-      // DIoU
-      auto diou = iou - (rho2 / (c2 + eps));
+      // GIoU
+      auto giou = inter / uni - ((encArea - uni) / encArea);
 
-      if (diou > diou_threshold) {
+      if (giou > giou_threshold) {
         suppressed[j] = 1;
       }
     }
@@ -136,10 +119,10 @@ at::Tensor diou_nms_kernel_impl(
 
 
 
-at::Tensor diou_nms_kernel(
+at::Tensor giou_nms_kernel(
     const at::Tensor& dets,
     const at::Tensor& scores,
-    double diou_threshold) {
+    double giou_threshold) {
   TORCH_CHECK(
       dets.dim() == 2, "boxes should be a 2d tensor, got ", dets.dim(), "D");
   TORCH_CHECK(
@@ -161,8 +144,8 @@ at::Tensor diou_nms_kernel(
 
   auto result = at::empty({0}, dets.options());
 
-  AT_DISPATCH_FLOATING_TYPES(dets.scalar_type(), "diou_nms_kernel", [&] {
-    result = diou_nms_kernel_impl<scalar_t>(dets, scores, diou_threshold);
+  AT_DISPATCH_FLOATING_TYPES(dets.scalar_type(), "giou_nms_kernel", [&] {
+    result = giou_nms_kernel_impl<scalar_t>(dets, scores, giou_threshold);
   });
   return result;
 }
@@ -170,7 +153,7 @@ at::Tensor diou_nms_kernel(
 } // namespace
 
 TORCH_LIBRARY_IMPL(gen_nms, CPU, m) {
-  m.impl(TORCH_SELECTIVE_NAME("gen_nms::diou_nms"), TORCH_FN(diou_nms_kernel));
+  m.impl(TORCH_SELECTIVE_NAME("gen_nms::giou_nms"), TORCH_FN(giou_nms_kernel));
 }
 
 } // namespace ops

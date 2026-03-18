@@ -3,7 +3,7 @@
 // Modifications Copyright (c) 2026 Elliot Blackstone.
 // Licensed under the BSD-3-Clause License. See LICENSE and THIRD_PARTY_NOTICES.md.
 
-#include "diou_nms.h"
+#include "giou_nms.h"
 
 #include <ATen/core/dispatch/Dispatcher.h>
 #include <torch/library.h>
@@ -12,19 +12,19 @@
 namespace gen_nms {
 namespace ops {
 
-at::Tensor diou_nms(
+at::Tensor giou_nms(
     const at::Tensor& dets,
     const at::Tensor& scores,
-    double diou_threshold) {
-  C10_LOG_API_USAGE_ONCE("gen_nms.csrc.ops.diou_nms.diou_nms");
+    double giou_threshold) {
+  C10_LOG_API_USAGE_ONCE("gen_nms.csrc.ops.giou_nms.giou_nms");
   static auto op = c10::Dispatcher::singleton()
-                       .findSchemaOrThrow("gen_nms::diou_nms", "")
-                       .typed<decltype(diou_nms)>();
-  return op.call(dets, scores, diou_threshold);
+                       .findSchemaOrThrow("gen_nms::giou_nms", "")
+                       .typed<decltype(giou_nms)>();
+  return op.call(dets, scores, giou_threshold);
 }
 
 TORCH_LIBRARY_FRAGMENT(gen_nms, m) {
-  m.def("gen_nms::diou_nms(Tensor dets, Tensor scores, float diou_threshold) -> Tensor");
+  m.def("gen_nms::giou_nms(Tensor dets, Tensor scores, float giou_threshold) -> Tensor");
 }
 
 } // namespace ops

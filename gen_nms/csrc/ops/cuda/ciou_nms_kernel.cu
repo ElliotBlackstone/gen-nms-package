@@ -8,6 +8,7 @@
 #include <ATen/cuda/CUDAContext.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <torch/library.h>
+#include <math_constants.h>
 
 #include "cuda_helpers.h"
 
@@ -19,7 +20,7 @@ namespace {
 int const threadsPerBlock = sizeof(unsigned long long) * 8;
 
 template <typename T>
-__device__ inline bool devDIoU(
+__device__ inline bool devCIoU(
     T const* const a,
     T const* const b,
     const float threshold) {
@@ -30,11 +31,18 @@ __device__ inline bool devDIoU(
   T left = max(a[0], b[0]), right = min(a[2], b[2]);
   T top  = max(a[1], b[1]), bottom = min(a[3], b[3]);
   T width = max(right - left, (T)0), height = max(bottom - top, (T)0);
-  acc_T interS = (acc_T)width * height;
+  acc_T interS = (acc_T)width * (acc_T)height;
+  
 
   // areas
-  acc_T Sa = ((acc_T)a[2] - a[0]) * (a[3] - a[1]);
-  acc_T Sb = ((acc_T)b[2] - b[0]) * (b[3] - b[1]);
+  acc_T wa = (acc_T)a[2] - a[0];
+  acc_T ha = (acc_T)a[3] - a[1];
+  acc_T wb = (acc_T)b[2] - b[0];
+  acc_T hb = (acc_T)b[3] - b[1];
+  acc_T Sa = wa * ha;
+  acc_T Sb = wb * hb;
+  acc_T uni = Sa + Sb - interS;
+  acc_T iou = interS / uni;
 
   // centers
   acc_T cax = ((acc_T)a[0] + a[2]) * 0.5;
@@ -52,13 +60,19 @@ __device__ inline bool devDIoU(
 
   acc_T c2 = (ex2 - ex1) * (ex2 - ex1) + (ey2 - ey1) * (ey2 - ey1);
 
-  return (interS / (Sa + Sb - interS) - (rho2 / c2)) > threshold;
+  // aspect ratio
+  acc_T atan_a = static_cast<acc_T>(atan(wa / ha));
+  acc_T atan_b = static_cast<acc_T>(atan(wb / hb));
+  acc_T v = (4 / (static_cast<acc_T>(3.14159265358979323846) * static_cast<acc_T>(3.14159265358979323846))) * (atan_a - atan_b) * (atan_a - atan_b);
+  acc_T alpha = v / (1 - iou + v);
+
+  return (iou - (rho2 / c2) - alpha * v) > threshold;
 }
 
 template <typename T>
-__global__ void diou_nms_kernel_impl(
+__global__ void ciou_nms_kernel_impl(
     int n_boxes,
-    double diou_threshold,
+    double ciou_threshold,
     const T* dev_boxes,
     unsigned long long* dev_mask) {
   const auto row_start = blockIdx.y;
@@ -95,7 +109,7 @@ __global__ void diou_nms_kernel_impl(
       start = threadIdx.x + 1;
     }
     for (i = start; i < col_size; i++) {
-      if (devDIoU<T>(cur_box, block_boxes + i * 4, diou_threshold)) {
+      if (devCIoU<T>(cur_box, block_boxes + i * 4, ciou_threshold)) {
         t |= 1ULL << i;
       }
     }
@@ -149,10 +163,10 @@ __global__ static void gather_keep_from_mask(
   }
 }
 
-at::Tensor diou_nms_kernel(
+at::Tensor ciou_nms_kernel(
     const at::Tensor& dets,
     const at::Tensor& scores,
-    double diou_threshold) {
+    double ciou_threshold) {
   TORCH_CHECK(dets.is_cuda(), "dets must be a CUDA tensor");
   TORCH_CHECK(scores.is_cuda(), "scores must be a CUDA tensor");
 
@@ -197,10 +211,10 @@ at::Tensor diou_nms_kernel(
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
-      dets_sorted.scalar_type(), "diou_nms_kernel", [&] {
-        diou_nms_kernel_impl<scalar_t><<<blocks, threads, 0, stream>>>(
+      dets_sorted.scalar_type(), "ciou_nms_kernel", [&] {
+        ciou_nms_kernel_impl<scalar_t><<<blocks, threads, 0, stream>>>(
             dets_num,
-            diou_threshold,
+            ciou_threshold,
             dets_sorted.data_ptr<scalar_t>(),
             (unsigned long long*)mask.data_ptr<int64_t>());
       });
@@ -229,7 +243,7 @@ at::Tensor diou_nms_kernel(
 } // namespace
 
 TORCH_LIBRARY_IMPL(gen_nms, CUDA, m) {
-  m.impl(TORCH_SELECTIVE_NAME("gen_nms::diou_nms"), TORCH_FN(diou_nms_kernel));
+  m.impl(TORCH_SELECTIVE_NAME("gen_nms::ciou_nms"), TORCH_FN(ciou_nms_kernel));
 }
 
 } // namespace ops

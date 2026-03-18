@@ -12,10 +12,10 @@ namespace ops {
 namespace {
 
 template <typename scalar_t>
-at::Tensor diou_nms_kernel_impl(
+at::Tensor iou_nms_kernel_impl(
     const at::Tensor& dets,
     const at::Tensor& scores,
-    double diou_threshold) {
+    double iou_threshold) {
   TORCH_CHECK(dets.is_cpu(), "dets must be a CPU tensor");
   TORCH_CHECK(scores.is_cpu(), "scores must be a CPU tensor");
   TORCH_CHECK(dets.scalar_type() == scores.scalar_type(),
@@ -36,10 +36,6 @@ at::Tensor diou_nms_kernel_impl(
 
   at::Tensor areas_t = (x2_t - x1_t) * (y2_t - y1_t);
 
-  // centers
-  at::Tensor cx_t = (x2_t + x1_t) * 0.5;
-  at::Tensor cy_t = (y2_t + y1_t) * 0.5;
-
   // Stable descending sort
   auto order_t = std::get<1>(scores.sort(/*stable=*/true, /*dim=*/0, /*descending=*/true));
 
@@ -55,10 +51,6 @@ at::Tensor diou_nms_kernel_impl(
   auto x2 = x2_t.data_ptr<scalar_t>();
   auto y2 = y2_t.data_ptr<scalar_t>();
   auto areas = areas_t.data_ptr<scalar_t>();
-  auto cx = cx_t.data_ptr<scalar_t>();
-  auto cy = cy_t.data_ptr<scalar_t>();
-
-  auto eps = 1e-7;
 
   int64_t num_to_keep = 0;
 
@@ -76,26 +68,16 @@ at::Tensor diou_nms_kernel_impl(
     auto iy2 = y2[i];
     auto iarea = areas[i];
 
-    // center of i
-    auto cix = cx[i];
-    auto ciy = cy[i];
-
     for (int64_t _j = _i + 1; _j < ndets; ++_j) {
       const int64_t j = order[_j];
       if (suppressed[j]) {
         continue;
       }
 
-      // box j
-      auto jx1 = x1[j];
-      auto jy1 = y1[j];
-      auto jx2 = x2[j];
-      auto jy2 = y2[j];
-
-      auto xx1 = std::max(ix1, jx1);
-      auto yy1 = std::max(iy1, jy1);
-      auto xx2 = std::min(ix2, jx2);
-      auto yy2 = std::min(iy2, jy2);
+      auto xx1 = std::max(ix1, x1[j]);
+      auto yy1 = std::max(iy1, y1[j]);
+      auto xx2 = std::min(ix2, x2[j]);
+      auto yy2 = std::min(iy2, y2[j]);
       
       auto w = std::max(static_cast<scalar_t>(0), xx2 - xx1);
       auto h = std::max(static_cast<scalar_t>(0), yy2 - yy1);
@@ -108,24 +90,7 @@ at::Tensor diou_nms_kernel_impl(
       }
       auto iou = inter / uni;
 
-      // center distance squared rho^2
-      auto dx = cix - cx[j];
-      auto dy = ciy - cy[j];
-      auto rho2 = dx * dx + dy * dy;
-
-      // enclosing diagonal squared c^2
-      auto ex1 = std::min(ix1, jx1);
-      auto ey1 = std::min(iy1, jy1);
-      auto ex2 = std::max(ix2, jx2);
-      auto ey2 = std::max(iy2, jy2);
-      auto cw = ex2 - ex1;
-      auto ch = ey2 - ey1;
-      auto c2 = cw * cw + ch * ch;
-
-      // DIoU
-      auto diou = iou - (rho2 / (c2 + eps));
-
-      if (diou > diou_threshold) {
+      if (iou > iou_threshold) {
         suppressed[j] = 1;
       }
     }
@@ -136,10 +101,10 @@ at::Tensor diou_nms_kernel_impl(
 
 
 
-at::Tensor diou_nms_kernel(
+at::Tensor iou_nms_kernel(
     const at::Tensor& dets,
     const at::Tensor& scores,
-    double diou_threshold) {
+    double iou_threshold) {
   TORCH_CHECK(
       dets.dim() == 2, "boxes should be a 2d tensor, got ", dets.dim(), "D");
   TORCH_CHECK(
@@ -161,8 +126,8 @@ at::Tensor diou_nms_kernel(
 
   auto result = at::empty({0}, dets.options());
 
-  AT_DISPATCH_FLOATING_TYPES(dets.scalar_type(), "diou_nms_kernel", [&] {
-    result = diou_nms_kernel_impl<scalar_t>(dets, scores, diou_threshold);
+  AT_DISPATCH_FLOATING_TYPES(dets.scalar_type(), "iou_nms_kernel", [&] {
+    result = iou_nms_kernel_impl<scalar_t>(dets, scores, iou_threshold);
   });
   return result;
 }
@@ -170,7 +135,7 @@ at::Tensor diou_nms_kernel(
 } // namespace
 
 TORCH_LIBRARY_IMPL(gen_nms, CPU, m) {
-  m.impl(TORCH_SELECTIVE_NAME("gen_nms::diou_nms"), TORCH_FN(diou_nms_kernel));
+  m.impl(TORCH_SELECTIVE_NAME("gen_nms::iou_nms"), TORCH_FN(iou_nms_kernel));
 }
 
 } // namespace ops

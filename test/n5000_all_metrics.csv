@@ -1,0 +1,13 @@
+group,metric,impl,device,time_ms,speedup_vs_python_cpu,speedup_vs_torchvision_same_device,exact_match_vs_python_cpu,tolerant_match_vs_python_cpu,num_kept,note
+all-metrics,IOU,pure_python,cpu,510.1715580003656,1.0,,True,True,3517,reference
+all-metrics,IOU,gen_nms,cpu,49.77249900002789,10.250069179770936,,True,True,3517,
+all-metrics,IOU,gen_nms,gpu,16.286720275878906,31.324388787836195,,True,True,3517,
+all-metrics,GIOU,pure_python,cpu,725.5842169997777,1.0,,True,True,3764,reference
+all-metrics,GIOU,gen_nms,cpu,58.380246999149676,12.428591078251964,,True,True,3764,
+all-metrics,GIOU,gen_nms,gpu,31.485952377319336,23.044696514323853,,True,True,3764,
+all-metrics,DIOU,pure_python,cpu,1041.7739399999846,1.0,,True,True,3633,reference
+all-metrics,DIOU,gen_nms,cpu,63.025179000760545,16.529488000143772,,True,True,3633,
+all-metrics,DIOU,gen_nms,gpu,16.976896286010742,61.364216547545524,,True,True,3633,
+all-metrics,CIOU,pure_python,cpu,1373.204060999342,1.0,,True,True,3641,reference
+all-metrics,CIOU,gen_nms,cpu,75.66394800051057,18.148723365453726,,True,True,3641,
+all-metrics,CIOU,gen_nms,gpu,17.935359954833984,76.56406475573591,,True,True,3641,
