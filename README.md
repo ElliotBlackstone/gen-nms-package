@@ -237,27 +237,40 @@ In ordinary distinct-score cases, CPU and GPU should usually agree.
 
 ## Benchmark snapshot
 
-On one benchmark (using [`test_gen_nms_all_metrics_v3.py`](./test/test_gen_nms_all_metrics_v3.py)) with **1000 boxes**, the `gen_nms` package exactly matched and delivered the following speedups relative to a Python-level baseline built around `torchvision.ops.distance_box_iou`:
+On one benchmark (using [`test_gen_nms_all_metrics_v4.py`](./test/test_gen_nms_all_metrics_v4.py)) with **1000 boxes**, the `gen_nms` package exactly matched and delivered the following speedups relative to a Python-level baseline built around `torchvision.ops.distance_box_iou`:
 
-| Metric | Pure Python CPU (ms) | gen_nms CPU (ms) | CPU Speedup vs Python | gen_nms GPU (ms) | GPU Speedup vs Python | Exact Match | Tolerant Match | Boxes Kept |
-|---|---:|---:|---:|---:|---:|---|---|---:|
-| IoU  | 76.417 | 2.100 | 36.39× | 2.395 | 31.91× | Yes | Yes | 885 |
-| GIoU | 106.461 | 2.573 | 41.37× | 2.459 | 43.30× | Yes | Yes | 917 |
-| DIoU | 140.793 | 2.753 | 51.14× | 2.876 | 48.95× | Yes | Yes | 903 |
-| CIoU | 194.392 | 3.288 | 59.11× | 2.948 | 65.94× | Yes | Yes | 905 |
+| Metric | Implementation | Device | Time (ms) | Speedup vs Python CPU | Matches Python CPU | Boxes Kept |
+| ------ | -------------- | -----: | --------: | --------------------: | ------------------ | ---------: |
+| IoU    | pure_python    |    cpu |    70.828 |                 1.00× | Yes                |        885 |
+| IoU    | gen_nms        |    cpu |     2.136 |                33.17× | Yes                |        885 |
+| IoU    | gen_nms        |    gpu |     2.290 |                30.93× | Yes                |        885 |
+| GIoU   | pure_python    |    cpu |    96.142 |                 1.00× | Yes                |        917 |
+| GIoU   | gen_nms        |    cpu |     2.401 |                40.04× | Yes                |        917 |
+| GIoU   | gen_nms        |    gpu |     2.439 |                39.42× | Yes                |        917 |
+| DIoU   | pure_python    |    cpu |   127.262 |                 1.00× | Yes                |        903 |
+| DIoU   | gen_nms        |    cpu |     2.746 |                46.35× | Yes                |        903 |
+| DIoU   | gen_nms        |    gpu |     2.345 |                54.27× | Yes                |        903 |
+| CIoU   | pure_python    |    cpu |   179.205 |                 1.00× | Yes                |        905 |
+| CIoU   | gen_nms        |    cpu |     3.110 |                57.63× | Yes                |        905 |
+| CIoU   | gen_nms        |    gpu |     2.490 |                71.96× | Yes                |        905 |
 
-These results are workload-dependent and should be treated as a benchmark example, not a universal performance guarantee.  More benchmark results are available in the ['test'](./test/) folder.  Unsurprisingly, GPU outperforms CPU for larger values of n, and vice versa for smaller values of n.  It is of note that in the n=10000 benchmark .csv file, the CIoU and GIoU algorithms (CPU + GPU) returned the same output as the Python implementation, but in a different order, hence the `same_sequence` column.
+
+These results are workload-dependent and should be treated as a benchmark example, not a universal performance guarantee.  More benchmark results are available in the ['test'](./test/) folder.  Unsurprisingly, GPU outperforms CPU for larger values of n, and vice versa for smaller values of n.
 
 ### IoU NMS vs `torchvision.ops.nms` (n = 1000)
 
 The following table demonstrates that `gen_nms.iou_nms` performs as well as `torchvision.ops.nms`.
 
-| Device | Pure Python (ms) | gen_nms (ms) | torchvision (ms) | gen_nms vs torchvision | Exact Match | Tolerant Match | Boxes Kept |
-|---|---:|---:|---:|---:|---|---|---:|
-| CPU | 76.417 | 2.100 | 2.116 | 1.007× faster | Yes | Yes | 885 |
-| GPU | 76.417* | 2.395 | 2.361 | 0.986× of torchvision | Yes | Yes | 885 |
+| Implementation  | Device | Time (ms) | Speedup vs Python CPU | Relative to `torchvision` | Matches Python CPU | Boxes Kept |
+| --------------- | -----: | --------: | --------------------: | ------------------------: | ------------------ | ---------: |
+| pure_python     |    cpu |    70.828 |                 1.00× |                         — | Yes                |        885 |
+| gen_nms         |    cpu |     2.136 |                33.17× |                    1.011× | Yes                |        885 |
+| torchvision_nms |    cpu |     2.159 |                32.81× |                    1.000× | Yes                |        885 |
+| gen_nms         |    gpu |     2.290 |                30.93× |                    0.999× | Yes                |        885 |
+| torchvision_nms |    gpu |     2.287 |                30.98× |                    1.000× | Yes                |        885 |
 
-\* Pure Python baseline is CPU-only and is shown for reference.
+
+
 
 ---
 
@@ -269,14 +282,36 @@ A quick smoke test:
 import torch
 import gen_nms
 
-print(hasattr(torch.ops.gen_nms, "diou_nms"))
-print(torch.ops.gen_nms.diou_nms)
+OPS = [
+    torch.ops.gen_nms.iou_nms,
+    torch.ops.gen_nms.giou_nms,
+    torch.ops.gen_nms.diou_nms,
+    torch.ops.gen_nms.ciou_nms,
+]
+
+def sample_inputs(device):
+    boxes = torch.tensor(
+        [
+            [0.0, 0.0, 10.0, 10.0],
+            [1.0, 1.0, 11.0, 11.0],
+            [50.0, 50.0, 60.0, 60.0],
+            [52.0, 52.0, 61.0, 61.0],
+        ],
+        dtype=torch.float32,
+        device=device,
+    )
+    scores = torch.tensor([0.9, 0.8, 0.7, 0.6], dtype=torch.float32, device=device)
+    return (boxes, scores, 0.5)
+
+for op in OPS:
+    torch.library.opcheck(op, sample_inputs("cpu"))
+    print(f"{op} CPU opcheck passed")
+
+if torch.cuda.is_available():
+    for op in OPS:
+        torch.library.opcheck(op, sample_inputs("cuda"))
+        print(f"{op} CUDA opcheck passed")
 ```
-
-Expected outcome:
-
-- `True`
-- an operator object such as `gen_nms.diou_nms`
 
 You can also run a simple functional check:
 

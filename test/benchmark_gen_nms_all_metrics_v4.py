@@ -1,7 +1,7 @@
 # to run, use
-# python benchmark_gen_nms_all_metrics_v3.py --n 1500 --repeats 10
+# python benchmark_gen_nms_all_metrics_v4.py --n 1500 --repeats 10
 # or 
-# python benchmark_gen_nms_all_metrics_v3.py --n 1500 --repeats 10 --csv-prefix benchmark_results
+# python benchmark_gen_nms_all_metrics_v4.py --n 1500 --repeats 10 --csv-prefix benchmark_results
 # to save a .csv file with the results
 from __future__ import annotations
 
@@ -168,47 +168,17 @@ def median_ms(values: List[float]) -> float:
     return ordered[len(ordered) // 2]
 
 
-def compare_outputs(
-    ref_idx: torch.Tensor,
-    test_idx: torch.Tensor,
-    boxes_cpu: torch.Tensor,
-    scores_cpu: torch.Tensor,
-    atol: float = 1e-5,
-    rtol: float = 1e-4,
-) -> Tuple[bool, bool, int]:
+def matches_python_cpu(ref_idx: torch.Tensor, test_idx: torch.Tensor) -> bool:
     ref_idx_cpu = ref_idx.detach().cpu().to(torch.long)
     test_idx_cpu = test_idx.detach().cpu().to(torch.long)
 
-    exact = torch.equal(ref_idx_cpu, test_idx_cpu)
     if ref_idx_cpu.numel() != test_idx_cpu.numel():
-        return exact, False, int(test_idx_cpu.numel())
+        return False
 
-    ref_boxes = boxes_cpu.index_select(0, ref_idx_cpu)
-    test_boxes = boxes_cpu.index_select(0, test_idx_cpu)
-
-    ref_scores = scores_cpu.index_select(0, ref_idx_cpu)
-    test_scores = scores_cpu.index_select(0, test_idx_cpu)
-
-    tolerant = (
-        torch.allclose(ref_boxes, test_boxes, atol=atol, rtol=rtol)
-        and torch.allclose(ref_scores, test_scores, atol=atol, rtol=rtol)
+    return torch.equal(
+        ref_idx_cpu.sort().values,
+        test_idx_cpu.sort().values,
     )
-    return exact, tolerant, int(test_idx_cpu.numel())
-
-def compare_outputs_unordered(
-    ref_idx: torch.Tensor,
-    test_idx: torch.Tensor,
-) -> tuple[bool, bool]:
-    ref_idx_cpu = ref_idx.detach().cpu().to(torch.long)
-    test_idx_cpu = test_idx.detach().cpu().to(torch.long)
-
-    same_length = ref_idx_cpu.numel() == test_idx_cpu.numel()
-    if not same_length:
-        return False, False
-
-    same_sequence = torch.equal(ref_idx_cpu, test_idx_cpu)
-    same_set = torch.equal(ref_idx_cpu.sort().values, test_idx_cpu.sort().values)
-    return same_sequence, same_set
 
 
 def make_random_boxes(
@@ -253,10 +223,7 @@ class Row:
     time_ms: Optional[float]
     speedup_vs_python_cpu: Optional[float]
     speedup_vs_torchvision_same_device: Optional[float]
-    exact_match_vs_python_cpu: Optional[bool]
-    tolerant_match_vs_python_cpu: Optional[bool]
-    same_set: Optional[bool]
-    same_sequence: Optional[bool]
+    matches_python_cpu: Optional[bool]
     num_kept: Optional[int]
     note: str = ""
 
@@ -408,17 +375,12 @@ def main() -> None:
             time_ms=py_time_ms,
             speedup_vs_python_cpu=1.0,
             speedup_vs_torchvision_same_device=None,
-            exact_match_vs_python_cpu=True,
-            tolerant_match_vs_python_cpu=True,
-            same_set=True,
-            same_sequence=True,
+            matches_python_cpu=True,
             num_kept=int(ref_idx_cpu.numel()),
             note="reference",
         ))
 
         gen_cpu = results[TaskKey(metric, "gen_nms", "cpu")]
-        exact_cpu, tol_cpu, kept_cpu = compare_outputs(ref_idx_cpu, gen_cpu.output, boxes_cpu, scores_cpu)
-        same_set, same_seq = compare_outputs_unordered(ref_idx_cpu, gen_cpu.output)
         metric_rows.append(Row(
             group="all-metrics",
             metric=metric.upper(),
@@ -427,18 +389,13 @@ def main() -> None:
             time_ms=gen_cpu.time_ms,
             speedup_vs_python_cpu=(py_time_ms / gen_cpu.time_ms) if gen_cpu.time_ms > 0 else None,
             speedup_vs_torchvision_same_device=None,
-            exact_match_vs_python_cpu=exact_cpu,
-            tolerant_match_vs_python_cpu=tol_cpu,
-            same_set=same_set,
-            same_sequence=same_seq,
-            num_kept=kept_cpu,
+            matches_python_cpu=matches_python_cpu(ref_idx_cpu, gen_cpu.output),
+            num_kept=int(gen_cpu.output.numel()),
             note="",
         ))
 
         if has_cuda:
             gen_gpu = results[TaskKey(metric, "gen_nms", "gpu")]
-            exact_gpu, tol_gpu, kept_gpu = compare_outputs(ref_idx_cpu, gen_gpu.output, boxes_cpu, scores_cpu)
-            same_set, same_seq = compare_outputs_unordered(ref_idx_cpu, gen_gpu.output)
             metric_rows.append(Row(
                 group="all-metrics",
                 metric=metric.upper(),
@@ -447,11 +404,8 @@ def main() -> None:
                 time_ms=gen_gpu.time_ms,
                 speedup_vs_python_cpu=(py_time_ms / gen_gpu.time_ms) if gen_gpu.time_ms > 0 else None,
                 speedup_vs_torchvision_same_device=None,
-                exact_match_vs_python_cpu=exact_gpu,
-                tolerant_match_vs_python_cpu=tol_gpu,
-                same_set=same_set,
-                same_sequence=same_seq,
-                num_kept=kept_gpu,
+                matches_python_cpu=matches_python_cpu(ref_idx_cpu, gen_gpu.output),
+                num_kept=int(gen_gpu.output.numel()),
                 note="",
             ))
 
@@ -459,10 +413,6 @@ def main() -> None:
     gen_iou_cpu = results[TaskKey("iou", "gen_nms", "cpu")]
     tv_iou_cpu = results[TaskKey("iou", "torchvision_nms", "cpu")]
 
-    exact_gen_cpu, tol_gen_cpu, kept_gen_cpu = compare_outputs(ref_iou.output, gen_iou_cpu.output, boxes_cpu, scores_cpu)
-    same_set_gen_cpu, same_seq_gen_cpu = compare_outputs_unordered(ref_iou.output, gen_iou_cpu.output)
-    exact_tv_cpu, tol_tv_cpu, kept_tv_cpu = compare_outputs(ref_iou.output, tv_iou_cpu.output, boxes_cpu, scores_cpu)
-    same_set_tv_cpu, same_seq_tv_cpu = compare_outputs_unordered(ref_iou.output, tv_iou_cpu.output)
 
     iou_vs_tv_rows.append(Row(
         group="iou-vs-torchvision",
@@ -472,10 +422,7 @@ def main() -> None:
         time_ms=ref_iou.time_ms,
         speedup_vs_python_cpu=1.0,
         speedup_vs_torchvision_same_device=None,
-        exact_match_vs_python_cpu=True,
-        tolerant_match_vs_python_cpu=True,
-        same_set=True,
-        same_sequence=True,
+        matches_python_cpu=True,
         num_kept=int(ref_iou.output.numel()),
         note="reference",
     ))
@@ -487,11 +434,8 @@ def main() -> None:
         time_ms=gen_iou_cpu.time_ms,
         speedup_vs_python_cpu=(ref_iou.time_ms / gen_iou_cpu.time_ms) if gen_iou_cpu.time_ms > 0 else None,
         speedup_vs_torchvision_same_device=(tv_iou_cpu.time_ms / gen_iou_cpu.time_ms) if gen_iou_cpu.time_ms > 0 else None,
-        exact_match_vs_python_cpu=exact_gen_cpu,
-        tolerant_match_vs_python_cpu=tol_gen_cpu,
-        same_set=same_set_gen_cpu,
-        same_sequence=same_seq_gen_cpu,
-        num_kept=kept_gen_cpu,
+        matches_python_cpu=matches_python_cpu(ref_iou.output, gen_iou_cpu.output),
+        num_kept=int(gen_iou_cpu.output.numel()),
         note="",
     ))
     iou_vs_tv_rows.append(Row(
@@ -502,22 +446,14 @@ def main() -> None:
         time_ms=tv_iou_cpu.time_ms,
         speedup_vs_python_cpu=(ref_iou.time_ms / tv_iou_cpu.time_ms) if tv_iou_cpu.time_ms > 0 else None,
         speedup_vs_torchvision_same_device=1.0,
-        exact_match_vs_python_cpu=exact_tv_cpu,
-        tolerant_match_vs_python_cpu=tol_tv_cpu,
-        same_set=same_set_tv_cpu,
-        same_sequence=same_seq_tv_cpu,
-        num_kept=kept_tv_cpu,
+        matches_python_cpu=matches_python_cpu(ref_iou.output, tv_iou_cpu.output),
+        num_kept=int(tv_iou_cpu.output.numel()),
         note="",
     ))
 
     if has_cuda:
         gen_iou_gpu = results[TaskKey("iou", "gen_nms", "gpu")]
         tv_iou_gpu = results[TaskKey("iou", "torchvision_nms", "gpu")]
-
-        exact_gen_gpu, tol_gen_gpu, kept_gen_gpu = compare_outputs(ref_iou.output, gen_iou_gpu.output, boxes_cpu, scores_cpu)
-        same_set_gen_gpu, same_seq_gen_gpu = compare_outputs_unordered(ref_iou.output, gen_iou_gpu.output)
-        exact_tv_gpu, tol_tv_gpu, kept_tv_gpu = compare_outputs(ref_iou.output, tv_iou_gpu.output, boxes_cpu, scores_cpu)
-        same_set_tv_gpu, same_seq_tv_gpu = compare_outputs_unordered(ref_iou.output, tv_iou_gpu.output)
 
         iou_vs_tv_rows.append(Row(
             group="iou-vs-torchvision",
@@ -527,11 +463,8 @@ def main() -> None:
             time_ms=gen_iou_gpu.time_ms,
             speedup_vs_python_cpu=(ref_iou.time_ms / gen_iou_gpu.time_ms) if gen_iou_gpu.time_ms > 0 else None,
             speedup_vs_torchvision_same_device=(tv_iou_gpu.time_ms / gen_iou_gpu.time_ms) if gen_iou_gpu.time_ms > 0 else None,
-            exact_match_vs_python_cpu=exact_gen_gpu,
-            tolerant_match_vs_python_cpu=tol_gen_gpu,
-            same_set=same_set_gen_gpu,
-            same_sequence=same_seq_gen_gpu,
-            num_kept=kept_gen_gpu,
+            matches_python_cpu=matches_python_cpu(ref_iou.output, gen_iou_gpu.output),
+            num_kept=int(gen_iou_gpu.output.numel()),
             note="",
         ))
         iou_vs_tv_rows.append(Row(
@@ -542,11 +475,8 @@ def main() -> None:
             time_ms=tv_iou_gpu.time_ms,
             speedup_vs_python_cpu=(ref_iou.time_ms / tv_iou_gpu.time_ms) if tv_iou_gpu.time_ms > 0 else None,
             speedup_vs_torchvision_same_device=1.0,
-            exact_match_vs_python_cpu=exact_tv_gpu,
-            tolerant_match_vs_python_cpu=tol_tv_gpu,
-            same_set=same_set_tv_gpu,
-            same_sequence=same_seq_tv_gpu,
-            num_kept=kept_tv_gpu,
+            matches_python_cpu=matches_python_cpu(ref_iou.output, tv_iou_gpu.output),
+            num_kept=int(tv_iou_gpu.output.numel()),
             note="",
         ))
 

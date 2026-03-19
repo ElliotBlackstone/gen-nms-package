@@ -2,20 +2,24 @@
 requires = [
     "setuptools>=68",
     "wheel",
-    "torch>=2.4"
+    "torch>=2.4",
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "gen-nms"
 version = "0.1.0"
-description = "Standalone DIoU-based NMS extension for PyTorch"
+description = "Standalone GIoU, DIoU, CIoU-based NMS extension for PyTorch (requires a preinstalled compatible PyTorch build)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "numpy"
+    "numpy",
 ]
 
 [project.optional-dependencies]
 gdown = ["gdown>=4.7.3"]
 scipy = ["scipy"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gen_nms*"]

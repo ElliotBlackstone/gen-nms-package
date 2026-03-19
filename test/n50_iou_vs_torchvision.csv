@@ -1,6 +1,6 @@
-group,metric,impl,device,time_ms,speedup_vs_python_cpu,speedup_vs_torchvision_same_device,exact_match_vs_python_cpu,tolerant_match_vs_python_cpu,num_kept,note
-iou-vs-torchvision,IOU,pure_python,cpu,3.36152100135223,1.0,,True,True,49,reference
-iou-vs-torchvision,IOU,gen_nms,cpu,0.04669700138038024,71.9857999868183,1.3183715937723153,True,True,49,
-iou-vs-torchvision,IOU,torchvision_nms,cpu,0.061564000134239905,54.6020562995006,1.0,True,True,49,
-iou-vs-torchvision,IOU,gen_nms,gpu,0.6133760213851929,5.480359329601564,1.0584306748726184,True,True,49,
-iou-vs-torchvision,IOU,torchvision_nms,gpu,0.6492159962654114,5.177816043796276,1.0,True,True,49,
+group,metric,impl,device,time_ms,speedup_vs_python_cpu,speedup_vs_torchvision_same_device,matches_python_cpu,num_kept,note
+iou-vs-torchvision,IOU,pure_python,cpu,3.2080810015031602,1.0,,True,49,reference
+iou-vs-torchvision,IOU,gen_nms,cpu,0.04717699994216673,68.0009539698556,1.263306321794984,True,49,
+iou-vs-torchvision,IOU,torchvision_nms,cpu,0.059599002270260826,53.82776354133622,1.0,True,49,
+iou-vs-torchvision,IOU,gen_nms,gpu,0.34508800506591797,9.296414115843753,1.0830860803203528,True,49,
+iou-vs-torchvision,IOU,torchvision_nms,gpu,0.37376001477241516,8.583264326593579,1.0,True,49,
