@@ -65,13 +65,11 @@ def get_macros_and_flags():
             define_macros += [("WITH_CUDA", None)]
             nvcc_flags = [] if NVCC_FLAGS is None else shlex.split(NVCC_FLAGS)
 
-            # Make the CUDA compile path explicit
-            nvcc_flags += ["-std=c++17"]
-
-            if sys.platform == "win32":
-                nvcc_flags += [
-                    "-Xcompiler=/Zc:__cplusplus",
-                ]
+            nvcc_flags += [
+                "-std=c++17",
+                "-Xcompiler", "/std:c++17",
+                "-Xcompiler", "/Zc:__cplusplus",
+            ]
 
         extra_compile_args["nvcc"] = nvcc_flags
 
