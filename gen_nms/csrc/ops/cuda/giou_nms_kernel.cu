@@ -222,7 +222,7 @@ at::Tensor giou_nms_kernel(
 } // namespace
 
 TORCH_LIBRARY_IMPL(gen_nms, CUDA, m) {
-  m.impl(TORCH_SELECTIVE_NAME("gen_nms::giou_nms"), TORCH_FN(giou_nms_kernel));
+  m.impl("giou_nms", TORCH_FN(giou_nms_kernel));
 }
 
 } // namespace ops

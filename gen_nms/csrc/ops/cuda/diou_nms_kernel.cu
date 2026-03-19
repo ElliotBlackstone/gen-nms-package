@@ -229,7 +229,7 @@ at::Tensor diou_nms_kernel(
 } // namespace
 
 TORCH_LIBRARY_IMPL(gen_nms, CUDA, m) {
-  m.impl(TORCH_SELECTIVE_NAME("gen_nms::diou_nms"), TORCH_FN(diou_nms_kernel));
+  m.impl("diou_nms", TORCH_FN(diou_nms_kernel));
 }
 
 } // namespace ops
