@@ -22,6 +22,8 @@ from torch.utils.cpp_extension import (
     ROCM_HOME,
 )
 
+
+
 FORCE_CUDA = os.getenv("FORCE_CUDA", "0") == "1"
 DEBUG = os.getenv("DEBUG", "0") == "1"
 NVCC_FLAGS = os.getenv("NVCC_FLAGS")
@@ -29,7 +31,16 @@ NVCC_FLAGS = os.getenv("NVCC_FLAGS")
 ROOT_DIR = Path(__file__).resolve().parent
 CSRC_DIR = ROOT_DIR / "gen_nms" / "csrc"
 IS_ROCM = (torch.version.hip is not None) and (ROCM_HOME is not None)
-BUILD_CUDA_SOURCES = (torch.cuda.is_available() and ((CUDA_HOME is not None) or IS_ROCM)) or FORCE_CUDA
+BUILD_CUDA_SOURCES = ((CUDA_HOME is not None) or IS_ROCM) or FORCE_CUDA
+
+
+print("torch.__version__ =", torch.__version__)
+print("torch.version.cuda =", torch.version.cuda)
+print("torch.cuda.is_available() =", torch.cuda.is_available())
+print("CUDA_HOME =", CUDA_HOME)
+print("IS_ROCM =", IS_ROCM)
+print("FORCE_CUDA =", FORCE_CUDA)
+print("BUILD_CUDA_SOURCES =", BUILD_CUDA_SOURCES)
 
 
 def get_macros_and_flags():
