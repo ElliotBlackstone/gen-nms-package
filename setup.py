@@ -47,6 +47,16 @@ def get_macros_and_flags():
     define_macros = []
     extra_compile_args = {"cxx": []}
 
+    if sys.platform == "win32":
+        # MSVC-specific flags
+        extra_compile_args["cxx"] += [
+            "/MP",
+            "/std:c++17",
+            "/Zc:__cplusplus",
+        ]
+    else:
+        extra_compile_args["cxx"] += ["-std=c++17"]
+
     if BUILD_CUDA_SOURCES:
         if IS_ROCM:
             define_macros += [("WITH_HIP", None)]
@@ -54,21 +64,30 @@ def get_macros_and_flags():
         else:
             define_macros += [("WITH_CUDA", None)]
             nvcc_flags = [] if NVCC_FLAGS is None else shlex.split(NVCC_FLAGS)
+
+            # Make the CUDA compile path explicit
+            nvcc_flags += ["-std=c++17"]
+
+            if sys.platform == "win32":
+                nvcc_flags += [
+                    "-Xcompiler=/Zc:__cplusplus",
+                ]
+
         extra_compile_args["nvcc"] = nvcc_flags
 
-    if sys.platform == "win32":
-        extra_compile_args["cxx"].append("/MP")
-        if sysconfig.get_config_var("Py_GIL_DISABLED"):
-            extra_compile_args["cxx"].append("-DPy_GIL_DISABLED")
-
     if DEBUG:
-        extra_compile_args["cxx"] += ["-g", "-O0"]
+        if sys.platform == "win32":
+            extra_compile_args["cxx"] += ["/Od"]
+        else:
+            extra_compile_args["cxx"] += ["-g", "-O0"]
+
         if "nvcc" in extra_compile_args:
             nvcc_flags = extra_compile_args["nvcc"]
             extra_compile_args["nvcc"] = [f for f in nvcc_flags if not ("-O" in f or "-g" in f)]
             extra_compile_args["nvcc"] += ["-O0", "-g"]
     else:
-        extra_compile_args["cxx"].append("-g0")
+        if sys.platform != "win32":
+            extra_compile_args["cxx"].append("-g0")
 
     return define_macros, extra_compile_args
 
