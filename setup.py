@@ -127,7 +127,7 @@ class clean(distutils.command.clean.clean):
 
 
 setup(
-    packages=find_packages(exclude=("test",)),
+    packages=["gen_nms", "gen_nms.ops"],
     ext_modules=[make_C_extension()],
     zip_safe=False,
     cmdclass={

@@ -4,22 +4,72 @@ requires = [
     "wheel",
     "torch>=2.4",
 ]
+
 build-backend = "setuptools.build_meta"
+
+build-frontend = { name = "pip", args = ["--no-build-isolation"] }
+before-build = "python -m pip install --upgrade pip setuptools wheel ninja torch==2.10.0"
+
+test-requires = ["torch==2.10.*"]
+test-command = "python {project}/test/smoke_test.py"
 
 [project]
 name = "gen-nms"
 version = "0.1.0"
-description = "Standalone GIoU, DIoU, CIoU-based NMS extension for PyTorch (requires a preinstalled compatible PyTorch build)"
+description = "Standalone IoU, GIoU, DIoU, and CIoU NMS extension for PyTorch"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    "numpy",
+dependencies = ["numpy"]
+
+authors = [
+  { name = "Elliot Blackstone" }
 ]
+
+license = "BSD-3-Clause"
+license-files = ["LICENSE.txt", "THIRD_PARTY_NOTICES.md"]
 
 [project.optional-dependencies]
 gdown = ["gdown>=4.7.3"]
 scipy = ["scipy"]
 
+[tool.cibuildwheel]
+build = "cp310-* cp311-* cp312-*"
+skip = "pp* *-win32 *-manylinux_i686 *-musllinux_*"
+build-verbosity = 1
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["gen_nms*"]
+
+keywords = [
+  "pytorch",
+  "nms",
+  "object-detection",
+  "computer-vision",
+  "cuda",
+  "giou",
+  "diou",
+  "ciou",
+]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: C++",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/ElliotBlackstone/gen-nms-package"
+Repository = "https://github.com/ElliotBlackstone/gen-nms-package"

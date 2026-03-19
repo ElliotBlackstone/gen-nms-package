@@ -39,43 +39,56 @@ The `iou_nms`, `batched_iou_nms` functions are identical to `torchvision` functi
 
 ## Installation
 
-### Option 1: install from a local clone
+`gen-nms` is currently installed from source. Install a compatible PyTorch build first, then install this package.
 
-```bash
-python -m pip install -e . --no-build-isolation
-```
+### 1. Install PyTorch first
 
-### Option 2: install from GitHub
-
-```bash
-python -m pip install git+https://github.com/ElliotBlackstone/gen-nms-package.git
-```
-
-### Build notes
-
-This package builds a compiled PyTorch extension. For CUDA builds:
-
-- your local CUDA toolkit should match the CUDA version that your installed PyTorch build expects
-- a working C++ compiler and `nvcc` are required
-- a virtual environment is strongly recommended
-
-A quick check inside Python is:
+Check your PyTorch build inside Python:
 
 ```python
 import torch
 print(torch.__version__)
 print(torch.version.cuda)
+print(torch.cuda.is_available())
 ```
 
-If you are building a CUDA extension, mismatches between the installed CUDA toolkit and `torch.version.cuda` can cause the build to fail.
+### 2. Install `gen-nms`
+
+From a local clone:
+```bash
+python -m pip install -e . --no-build-isolation
+```
+
+From GitHub:
+```bash
+python -m pip install --no-build-isolation git+https://github.com/ElliotBlackstone/gen-nms-package.git
+```
+
+
+### 3. CUDA build notes
+
+-Install a local CUDA toolkit 
+-Install PyTorch with CUDA support (that matches your toolkit version)
+-Ensure a working C++ compiler and `nvcc` are available
+-On Windows, build from an x64 Visual Studio 2022 developer/native tools shell
 
 ---
 
-## Quick start
+## Verifying the installation
+
+### Minimal smoke test
 
 ```python
 import torch
 import gen_nms
+
+print("torch:", torch.__version__)
+print("torch.version.cuda:", torch.version.cuda)
+print("cuda available:", torch.cuda.is_available())
+
+for name in ["iou_nms", "giou_nms", "diou_nms", "ciou_nms"]:
+    assert hasattr(gen_nms, name), f"missing Python API: {name}"
+    assert hasattr(torch.ops.gen_nms, name), f"missing registered op: {name}"
 
 boxes = torch.tensor([
     [0.0, 0.0, 10.0, 10.0],
@@ -86,11 +99,13 @@ boxes = torch.tensor([
 scores = torch.tensor([0.9, 0.8, 0.7], dtype=torch.float32)
 labels = torch.tensor([0, 0, 1], dtype=torch.int64)
 
-keep_class_agnostic = gen_nms.diou_nms(boxes, scores, 0.5)
-keep_per_class = gen_nms.batched_diou_nms(boxes, scores, labels, 0.5)
+print("diou_nms:", gen_nms.diou_nms(boxes, scores, 0.5))
+print("batched_diou_nms:", gen_nms.batched_diou_nms(boxes, scores, labels, 0.5))
 
-print(keep_class_agnostic)
-print(keep_per_class)
+if torch.cuda.is_available():
+    boxes_cuda = boxes.cuda()
+    scores_cuda = scores.cuda()
+    print("diou_nms (cuda):", gen_nms.diou_nms(boxes_cuda, scores_cuda, 0.5))
 ```
 
 ---
