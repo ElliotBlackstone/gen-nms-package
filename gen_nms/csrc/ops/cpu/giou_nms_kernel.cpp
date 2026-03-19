@@ -52,8 +52,6 @@ at::Tensor giou_nms_kernel_impl(
   auto y2 = y2_t.data_ptr<scalar_t>();
   auto areas = areas_t.data_ptr<scalar_t>();
 
-  auto eps = 1e-7;
-
   int64_t num_to_keep = 0;
 
   for (int64_t _i = 0; _i < ndets; ++_i) {
