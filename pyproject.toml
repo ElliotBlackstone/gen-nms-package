@@ -4,13 +4,9 @@ requires = [
     "wheel",
     "torch>=2.4",
 ]
-
 build-backend = "setuptools.build_meta"
 
-before-build = "python -m pip install --upgrade pip setuptools wheel ninja torch==2.10.0"
 
-test-requires = ["torch==2.10.*"]
-test-command = "python {project}/test/smoke_test.py"
 
 [project]
 name = "gen-nms"
@@ -26,26 +22,6 @@ authors = [
 
 license = "BSD-3-Clause"
 license-files = ["LICENSE.txt", "THIRD_PARTY_NOTICES.md"]
-
-[project.optional-dependencies]
-gdown = ["gdown>=4.7.3"]
-scipy = ["scipy"]
-
-[tool.cibuildwheel]
-build = "cp310-* cp311-* cp312-*"
-skip = "pp* *-win32 *-manylinux_i686 *-musllinux_*"
-build-verbosity = 3
-build-frontend = { name = "pip", args = ["--no-build-isolation"] }
-
-[tool.cibuildwheel.linux]
-archs = ["x86_64"]
-
-[tool.cibuildwheel.windows]
-archs = ["AMD64"]
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["gen_nms*"]
 
 keywords = [
   "pytorch",
@@ -69,6 +45,35 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Software Development :: Libraries",
 ]
+
+
+[project.optional-dependencies]
+gdown = ["gdown>=4.7.3"]
+scipy = ["scipy"]
+
+
+[tool.cibuildwheel]
+build = "cp310-* cp311-* cp312-*"
+skip = "pp* *-win32 *-manylinux_i686 *-musllinux_*"
+build-verbosity = 3
+build-frontend = { name = "pip", args = ["--no-build-isolation"] }
+before-build = "python -m pip install --upgrade pip setuptools wheel ninja torch==2.10.0"
+test-requires = ["torch==2.10.*"]
+test-command = "python {project}/test/smoke_test.py"
+
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gen_nms*"]
+
 
 [project.urls]
 Homepage = "https://github.com/ElliotBlackstone/gen-nms-package"
