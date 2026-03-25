@@ -44,11 +44,12 @@ print("BUILD_CUDA_SOURCES =", BUILD_CUDA_SOURCES)
 
 
 def get_macros_and_flags():
-    define_macros = []
-    extra_compile_args = {"cxx": []}
+    define_macros: list[tuple[str, str | None]] = []
+    extra_compile_args: dict[str, list[str]] = {"cxx": []}
 
-    if sys.platform == "win32":
-        # MSVC-specific flags
+    is_windows = (sys.platform == "win32")
+
+    if is_windows:
         extra_compile_args["cxx"] += [
             "/MP",
             "/std:c++17",
@@ -60,31 +61,37 @@ def get_macros_and_flags():
     if BUILD_CUDA_SOURCES:
         if IS_ROCM:
             define_macros += [("WITH_HIP", None)]
-            nvcc_flags = []
+            nvcc_flags: list[str] = []
         else:
             define_macros += [("WITH_CUDA", None)]
             nvcc_flags = [] if NVCC_FLAGS is None else shlex.split(NVCC_FLAGS)
 
-            nvcc_flags += [
-                "-std=c++17",
-                "-Xcompiler", "/std:c++17",
-                "-Xcompiler", "/Zc:__cplusplus",
-            ]
+            if "-std=c++17" not in nvcc_flags:
+                nvcc_flags.append("-std=c++17")
+
+            if is_windows:
+                nvcc_flags += [
+                    "-Xcompiler", "/std:c++17",
+                    "-Xcompiler", "/Zc:__cplusplus",
+                ]
 
         extra_compile_args["nvcc"] = nvcc_flags
 
     if DEBUG:
-        if sys.platform == "win32":
+        if is_windows:
             extra_compile_args["cxx"] += ["/Od"]
         else:
             extra_compile_args["cxx"] += ["-g", "-O0"]
 
         if "nvcc" in extra_compile_args:
-            nvcc_flags = extra_compile_args["nvcc"]
-            extra_compile_args["nvcc"] = [f for f in nvcc_flags if not ("-O" in f or "-g" in f)]
-            extra_compile_args["nvcc"] += ["-O0", "-g"]
+            filtered = []
+            for f in extra_compile_args["nvcc"]:
+                if f in {"-O0", "-O1", "-O2", "-O3", "-g"}:
+                    continue
+                filtered.append(f)
+            extra_compile_args["nvcc"] = filtered + ["-O0", "-g"]
     else:
-        if sys.platform != "win32":
+        if not is_windows:
             extra_compile_args["cxx"].append("-g0")
 
     return define_macros, extra_compile_args
