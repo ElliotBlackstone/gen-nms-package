@@ -1,6 +1,6 @@
 # gen-nms
 
-A small PyTorch extension package that provides **IoU, generalized IoU (GIoU), distance IoU (DIoU), complete IoU (CIoU)-based non-maximum suppression (NMS)** (with CUDA support) as a standalone package, without modifying `torchvision`.
+A small PyTorch extension package that provides **IoU, generalized IoU (GIoU), distance IoU (DIoU), and complete IoU (CIoU)-based non-maximum suppression (NMS)** as a standalone package, implemented in native C++ on CPU and CUDA on GPU, without modifying `torchvision`.
 
 The package exposes eight main functions:
 
@@ -56,7 +56,7 @@ print(torch.cuda.is_available())
 
 From a local clone:
 ```bash
-python -m pip install -e . --no-build-isolation
+python -m pip install . --no-build-isolation
 ```
 
 From GitHub:
@@ -67,173 +67,62 @@ python -m pip install --no-build-isolation git+https://github.com/ElliotBlacksto
 
 ### 3. CUDA build notes
 
--Install a local CUDA toolkit 
--Install PyTorch with CUDA support (that matches your toolkit version)
--Ensure a working C++ compiler and `nvcc` are available
--On Windows, build from an x64 Visual Studio 2022 developer/native tools shell
+- Install a local CUDA toolkit 
+- Install PyTorch with CUDA support (that matches your toolkit version)
+- Ensure a working C++ compiler and `nvcc` are available
+- On Windows, build from an x64 Visual Studio 2022 developer/native tools shell
 
 ---
 
 ## Verifying the installation
 
-### Minimal smoke test
+Run the smoke test:
 
-```python
-import torch
-import gen_nms
-
-print("torch:", torch.__version__)
-print("torch.version.cuda:", torch.version.cuda)
-print("cuda available:", torch.cuda.is_available())
-
-for name in ["iou_nms", "giou_nms", "diou_nms", "ciou_nms"]:
-    assert hasattr(gen_nms, name), f"missing Python API: {name}"
-    assert hasattr(torch.ops.gen_nms, name), f"missing registered op: {name}"
-
-boxes = torch.tensor([
-    [0.0, 0.0, 10.0, 10.0],
-    [1.0, 1.0, 11.0, 11.0],
-    [50.0, 50.0, 60.0, 60.0],
-], dtype=torch.float32)
-
-scores = torch.tensor([0.9, 0.8, 0.7], dtype=torch.float32)
-labels = torch.tensor([0, 0, 1], dtype=torch.int64)
-
-print("diou_nms:", gen_nms.diou_nms(boxes, scores, 0.5))
-print("batched_diou_nms:", gen_nms.batched_diou_nms(boxes, scores, labels, 0.5))
-
-if torch.cuda.is_available():
-    boxes_cuda = boxes.cuda()
-    scores_cuda = scores.cuda()
-    print("diou_nms (cuda):", gen_nms.diou_nms(boxes_cuda, scores_cuda, 0.5))
+```bash
+python test/smoke_test.py
 ```
+
+Run the operator checks:
+```bash
+python test/test_opcheck.py
+```
+
 
 ---
 
 ## API
 
-### `gen_nms.iou_nms(boxes, scores, iou_threshold)`
+All functions return a `Tensor[K]` of kept indices, ordered by decreasing score.
 
-Performs class-agnostic IoU NMS on one pool of boxes.
-
-**Arguments**
+### Common arguments
 
 - `boxes`: `Tensor[N, 4]` in `(x1, y1, x2, y2)` format
 - `scores`: `Tensor[N]`
-- `iou_threshold`: `float`
+- `idxs`: `Tensor[N]` containing class/category indices (batched functions only)
+- `*_threshold`: `float` threshold for the corresponding overlap metric
 
-**Returns**
+### Function summary
 
-- `Tensor[K]` containing kept indices, ordered by decreasing score
+| Function | Suppression scope | Overlap metric |
+| --- | --- | --- |
+| `gen_nms.iou_nms(boxes, scores, iou_threshold)` | class-agnostic | IoU |
+| `gen_nms.batched_iou_nms(boxes, scores, idxs, iou_threshold)` | per-class | IoU |
+| `gen_nms.giou_nms(boxes, scores, giou_threshold)` | class-agnostic | GIoU |
+| `gen_nms.batched_giou_nms(boxes, scores, idxs, giou_threshold)` | per-class | GIoU |
+| `gen_nms.diou_nms(boxes, scores, diou_threshold)` | class-agnostic | DIoU |
+| `gen_nms.batched_diou_nms(boxes, scores, idxs, diou_threshold)` | per-class | DIoU |
+| `gen_nms.ciou_nms(boxes, scores, ciou_threshold)` | class-agnostic | CIoU |
+| `gen_nms.batched_ciou_nms(boxes, scores, idxs, ciou_threshold)` | per-class | CIoU |
 
-### `gen_nms.batched_iou_nms(boxes, scores, idxs, iou_threshold)`
+### Class-agnostic vs batched
 
-Performs IoU NMS independently per class.
+- The class-agnostic functions allow any box to suppress any other box.
+- The batched functions only allow suppression among boxes with the same value in `idxs`.
 
-**Arguments**
+### Notes
 
-- `boxes`: `Tensor[N, 4]` in `(x1, y1, x2, y2)` format
-- `scores`: `Tensor[N]`
-- `idxs`: `Tensor[N]` containing class/category indices
-- `iou_threshold`: `float`
-
-**Returns**
-
-- `Tensor[K]` containing kept indices, ordered by decreasing score
-
-### `gen_nms.giou_nms(boxes, scores, giou_threshold)`
-
-Performs class-agnostic GIoU NMS on one pool of boxes.
-
-**Arguments**
-
-- `boxes`: `Tensor[N, 4]` in `(x1, y1, x2, y2)` format
-- `scores`: `Tensor[N]`
-- `giou_threshold`: `float`
-
-**Returns**
-
-- `Tensor[K]` containing kept indices, ordered by decreasing score
-
-### `gen_nms.batched_giou_nms(boxes, scores, idxs, giou_threshold)`
-
-Performs GIoU NMS independently per class.
-
-**Arguments**
-
-- `boxes`: `Tensor[N, 4]` in `(x1, y1, x2, y2)` format
-- `scores`: `Tensor[N]`
-- `idxs`: `Tensor[N]` containing class/category indices
-- `giou_threshold`: `float`
-
-**Returns**
-
-- `Tensor[K]` containing kept indices, ordered by decreasing score
-
-### `gen_nms.diou_nms(boxes, scores, diou_threshold)`
-
-Performs class-agnostic DIoU NMS on one pool of boxes.
-
-**Arguments**
-
-- `boxes`: `Tensor[N, 4]` in `(x1, y1, x2, y2)` format
-- `scores`: `Tensor[N]`
-- `diou_threshold`: `float`
-
-**Returns**
-
-- `Tensor[K]` containing kept indices, ordered by decreasing score
-
-### `gen_nms.batched_diou_nms(boxes, scores, idxs, diou_threshold)`
-
-Performs DIoU NMS independently per class.
-
-**Arguments**
-
-- `boxes`: `Tensor[N, 4]` in `(x1, y1, x2, y2)` format
-- `scores`: `Tensor[N]`
-- `idxs`: `Tensor[N]` containing class/category indices
-- `diou_threshold`: `float`
-
-**Returns**
-
-- `Tensor[K]` containing kept indices, ordered by decreasing score
-
-### `gen_nms.ciou_nms(boxes, scores, ciou_threshold)`
-
-Performs class-agnostic CIoU NMS on one pool of boxes.
-
-**Arguments**
-
-- `boxes`: `Tensor[N, 4]` in `(x1, y1, x2, y2)` format
-- `scores`: `Tensor[N]`
-- `ciou_threshold`: `float`
-
-**Returns**
-
-- `Tensor[K]` containing kept indices, ordered by decreasing score
-
-### `gen_nms.batched_ciou_nms(boxes, scores, idxs, ciou_threshold)`
-
-Performs CIoU NMS independently per class.
-
-**Arguments**
-
-- `boxes`: `Tensor[N, 4]` in `(x1, y1, x2, y2)` format
-- `scores`: `Tensor[N]`
-- `idxs`: `Tensor[N]` containing class/category indices
-- `ciou_threshold`: `float`
-
-**Returns**
-
-- `Tensor[K]` containing kept indices, ordered by decreasing score
-
-### Difference between the two
-
-- `diou_nms(...)` allows any box to suppress any other box
-- `batched_diou_nms(...)` only suppresses boxes within the same class label
-
-DIoU was used above as an example.  This relation holds for IoU, GIoU, and CIoU.
+- `gen_nms.iou_nms` and `gen_nms.batched_iou_nms` are included for completeness and benchmarking against the corresponding `torchvision` IoU-based APIs.
+- CPU tensors dispatch to the CPU implementation, and CUDA tensors dispatch to the CUDA implementation.
 
 ---
 
@@ -270,7 +159,7 @@ On one benchmark (using [`test_gen_nms_all_metrics_v4.py`](./test/test_gen_nms_a
 | CIoU   | gen_nms        |    gpu |     2.490 |                71.96× | Yes                |        905 |
 
 
-These results are workload-dependent and should be treated as a benchmark example, not a universal performance guarantee.  More benchmark results are available in the ['test'](./test/) folder.  Unsurprisingly, GPU outperforms CPU for larger values of n, and vice versa for smaller values of n.
+These results are workload-dependent and should be treated as a benchmark example, not a universal performance guarantee.  More benchmark results are available in the ['test/'](./test/) folder.  Unsurprisingly, GPU outperforms CPU for larger values of n, and vice versa for smaller values of n.
 
 ### IoU NMS vs `torchvision.ops.nms` (n = 1000)
 
@@ -285,68 +174,6 @@ The following table demonstrates that `gen_nms.iou_nms` performs as well as `tor
 | torchvision_nms |    gpu |     2.287 |                30.98× |                    1.000× | Yes                |        885 |
 
 
-
-
----
-
-## Verifying the installation
-
-A quick smoke test:
-
-```python
-import torch
-import gen_nms
-
-OPS = [
-    torch.ops.gen_nms.iou_nms,
-    torch.ops.gen_nms.giou_nms,
-    torch.ops.gen_nms.diou_nms,
-    torch.ops.gen_nms.ciou_nms,
-]
-
-def sample_inputs(device):
-    boxes = torch.tensor(
-        [
-            [0.0, 0.0, 10.0, 10.0],
-            [1.0, 1.0, 11.0, 11.0],
-            [50.0, 50.0, 60.0, 60.0],
-            [52.0, 52.0, 61.0, 61.0],
-        ],
-        dtype=torch.float32,
-        device=device,
-    )
-    scores = torch.tensor([0.9, 0.8, 0.7, 0.6], dtype=torch.float32, device=device)
-    return (boxes, scores, 0.5)
-
-for op in OPS:
-    torch.library.opcheck(op, sample_inputs("cpu"))
-    print(f"{op} CPU opcheck passed")
-
-if torch.cuda.is_available():
-    for op in OPS:
-        torch.library.opcheck(op, sample_inputs("cuda"))
-        print(f"{op} CUDA opcheck passed")
-```
-
-You can also run a simple functional check:
-
-```python
-import torch
-import gen_nms
-
-boxes = torch.tensor([
-    [0.0, 0.0, 10.0, 10.0],
-    [1.0, 1.0, 11.0, 11.0],
-    [50.0, 50.0, 60.0, 60.0],
-], dtype=torch.float32)
-
-scores = torch.tensor([0.9, 0.8, 0.7], dtype=torch.float32)
-labels = torch.tensor([0, 0, 1], dtype=torch.int64)
-
-print(gen_nms.diou_nms(boxes, scores, 0.5))
-print(gen_nms.batched_diou_nms(boxes, scores, labels, 0.5))
-```
-
 ---
 
 ## Development notes
@@ -357,7 +184,7 @@ If you are modifying the extension source:
 - Python-only changes are easier to test in an editable install
 - avoid deleting files recursively inside `.venv/` when cleaning build artifacts
 
-A safe clean-and-reinstall sequence is:
+A safe clean-and-reinstall sequence is (assuming your environment name is `.venv`):
 
 ```bash
 find . -path './.venv' -prune -o -name '*.o' -delete
