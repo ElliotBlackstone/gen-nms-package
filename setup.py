@@ -133,12 +133,17 @@ class clean(distutils.command.clean.clean):
         super().run()
 
 
+class BuildExtNoAbiSuffix(BuildExtension):
+    def initialize_options(self):
+        super().initialize_options()
+        self.no_python_abi_suffix = True
+
 setup(
     packages=["gen_nms", "gen_nms.ops"],
     ext_modules=[make_C_extension()],
     zip_safe=False,
     cmdclass={
-        "build_ext": BuildExtension.with_options(no_python_abi_suffix=True),
+        "build_ext": BuildExtNoAbiSuffix,
         "clean": clean,
     },
 )

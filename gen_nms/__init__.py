@@ -1,5 +1,7 @@
-import torch
-from . import _C
+from .extension import _assert_has_ops
+
+_assert_has_ops()
+
 from . import _meta_registrations
 from .ops import (
     iou_nms, giou_nms, diou_nms, ciou_nms,

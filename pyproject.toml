@@ -79,6 +79,7 @@ auditwheel repair --only-plat \
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
+CUDA_HOME = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.8"
 
 
 [tool.setuptools.packages.find]
